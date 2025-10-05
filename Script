@@ -1,0 +1,47 @@
+const LINE_TOKEN = 'YOUR_LINE_CHANNEL_ACCESS_TOKEN';
+const FOLDER_ID = 'YOUR_GOOGLE_DRIVE_FOLDER_ID';
+
+function doPost(e) {
+  const json = JSON.parse(e.postData.contents);
+
+  if (json.events && json.events.length > 0) {
+    const event = json.events[0];
+    const userId = event.source.userId;
+
+    // ตรวจสอบว่าเป็น message event
+    if (event.type === 'message' && event.message.type !== 'text') {
+      const messageId = event.message.id;
+      const fileName = 'linefile_' + new Date().getTime();
+
+      // ดึงข้อมูลไฟล์จาก LINE server
+      const fileResponse = UrlFetchApp.fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+        headers: { Authorization: 'Bearer ' + LINE_TOKEN },
+        muteHttpExceptions: true
+      });
+
+      // สร้างไฟล์ใน Google Drive
+      const blob = fileResponse.getBlob();
+      const folder = DriveApp.getFolderById(FOLDER_ID);
+      const createdFile = folder.createFile(blob.setName(fileName));
+
+      // ส่งข้อความตอบกลับ
+      const replyMsg = {
+        replyToken: event.replyToken,
+        messages: [
+          { type: 'text', text: '📂 บันทึกไฟล์เรียบร้อยแล้ว: ' + createdFile.getUrl() }
+        ]
+      };
+
+      UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
+        method: 'post',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + LINE_TOKEN
+        },
+        payload: JSON.stringify(replyMsg)
+      });
+    }
+  }
+
+  return ContentService.createTextOutput('OK');
+}
